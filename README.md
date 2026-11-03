@@ -26,6 +26,30 @@ logs/               运行日志
 scripts/            MCP/投递自检、开机自启安装脚本
 ```
 
+## 快速开始（从零克隆）
+
+```powershell
+git clone <repo-url> E:\voice
+cd E:\voice
+
+# 1) Python 环境（uv 会自动装 3.12）
+uv sync
+
+# 2) 下载 SenseVoice int8 模型（约 239MB，国内可用 hf-mirror）
+New-Item -ItemType Directory -Force models\sensevoice | Out-Null
+curl.exe -L -o models\sensevoice\model.int8.onnx https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx
+curl.exe -L -o models\sensevoice\tokens.txt https://hf-mirror.com/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt
+
+# 3) 自检
+uv run voice-check --record 4
+uv run python scripts\selftest_e2e.py
+
+# 4) 启动守护进程
+uv run voice-daemon
+```
+
+平台：Windows 10/11（音频提示音、全局热键依赖 Windows）。Linux 下需自行处理 `winsound` 和音频设备。
+
 ## 使用
 
 ```powershell
