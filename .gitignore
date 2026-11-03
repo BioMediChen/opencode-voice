@@ -1,0 +1,12 @@
+.venv/
+logs/
+__pycache__/
+*.pyc
+.uv/
+
+# 本地模型体积大，不入库；用 README 里的下载命令获取
+models/
+*.onnx
+
+# whisper.cpp 是独立 clone，保留它自己的 git 历史
+whisper.cpp/

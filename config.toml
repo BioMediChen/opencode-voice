@@ -1,0 +1,52 @@
+# 语音控制 OpenCode 配置
+# 修改后重启语音守护进程即可生效。
+
+[asr]
+model = "models/sensevoice/model.int8.onnx"
+tokens = "models/sensevoice/tokens.txt"
+num_threads = 8
+language = "auto"   # auto / zh / en / ja / ko / yue
+use_itn = true      # 数字、标点等文本规范化
+
+[audio]
+# 留空 = 系统默认输入设备；也可填设备序号或名称片段，如 "HECATE"
+device = ""
+min_duration = 0.25        # 短于该时长(秒)的录音忽略
+silence_threshold = 0.01   # 首尾静音裁剪阈值
+pre_roll = 0.15            # 按键前保留的音频(秒)
+beep = true                # 开始/结束录音时播放提示音
+
+[hotkey]
+key = "f8"          # f1..f12 / caps_lock / scroll_lock / 单字符
+mouse = ["x2"]      # 鼠标侧键：x1(后)/x2(前)/middle；留空 [] 表示不启用
+
+[commands]
+# 说完这些词直接打断当前 agent 回合，不投递文本
+stop = ["停止", "停下来", "停", "停一下", "停下", "取消", "别做了", "暂停", "stop", "cancel"]
+
+# 识别结果纠错：左边是正确写法，右边是常见说法。
+# 以 use 开头的两词名称会自动展开成 use/us/u/you/优/优思/优斯 + state/stay/stat 等音近组合。
+[terms]
+"useState" = ["use state"]
+"useEffect" = ["use effect"]
+"useRef" = ["use ref"]
+"useMemo" = ["use memo"]
+"useContext" = ["use context"]
+"useReducer" = ["use reducer"]
+"useCallback" = ["use callback"]
+"Next.js" = ["next js", "nextjs", "next 点 js"]
+"TypeScript" = ["type script", "typescript"]
+"JavaScript" = ["java script", "javascript"]
+"Node.js" = ["node js", "nodejs"]
+"VS Code" = ["vs code", "vscode", "v s code"]
+"GitHub" = ["git hub", "github"]
+"git commit" = ["get commit", "git commet"]
+
+[opencode]
+directory = "E:\\voice"   # 自动选择该目录下最近更新的会话
+session_id = ""           # 填了则固定投递到该会话
+allow_fallback = false    # 该目录没有会话时，是否退回全局最近会话
+
+[server]
+host = "127.0.0.1"
+port = 8756
