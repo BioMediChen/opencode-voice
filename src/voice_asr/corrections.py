@@ -74,7 +74,7 @@ def apply_corrections(
     fired: list[tuple[str, str]] = []
     result = text
     for pattern, target in rules if rules is not None else build_rules(terms):
-        patched, count = pattern.subn(target, result)
+        patched, count = pattern.subn(lambda _match: target, result)
         if count:
             fired.append((pattern.pattern, target))
             result = patched

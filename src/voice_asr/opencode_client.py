@@ -51,10 +51,17 @@ def discover_base_url() -> str:
 
 
 class OpenCodeClient:
-    def __init__(self, directory: str, session_id: str = "", allow_fallback: bool = False) -> None:
+    def __init__(
+        self,
+        directory: str,
+        session_id: str = "",
+        allow_fallback: bool = False,
+        session_mode: str = "auto",
+    ) -> None:
         self.directory = str(Path(directory).resolve())
         self.pinned_session = session_id.strip()
         self.allow_fallback = allow_fallback
+        self.session_mode = session_mode.strip().lower() or "auto"
         self._base_url: str | None = None
         self._client: httpx.Client | None = None
 
@@ -99,37 +106,87 @@ class OpenCodeClient:
         payload = self._request("GET", "/api/session", params={"limit": limit})
         return payload.get("data") or []
 
+    def _get_session(self, session_id: str) -> dict:
+        return self._request("GET", f"/api/session/{session_id}")["data"]
+
+    def active_sessions(self) -> list[str]:
+        try:
+            payload = self._request("GET", "/api/session/active")
+        except OpenCodeError:
+            return []
+        return list((payload.get("data") or {}).keys())
+
     def resolve_session(self) -> dict:
-        if self.pinned_session:
-            payload = self._request("GET", f"/api/session/{self.pinned_session}")
-            return payload["data"]
+        if self.pinned_session or self.session_mode == "pinned":
+            session = self._get_session(self.pinned_session)
+            log.info("pinned session: %s", session.get("id"))
+            return session
+
+        # A single running session is almost certainly the one being steered or
+        # interrupted by voice, so prefer it over timestamps.
+        if self.session_mode == "auto":
+            active = self.active_sessions()
+            if len(active) == 1:
+                session = self._get_session(active[0])
+                log.info("active session: %s %r", session.get("id"), session.get("title", ""))
+                return session
+
         sessions = self._list_sessions()
         if not sessions:
             raise OpenCodeError("no OpenCode sessions found; open a session in the TUI first")
 
-        target = os.path.normcase(os.path.normpath(self.directory))
-
-        def in_target(session: dict) -> bool:
-            location = (session.get("location") or {}).get("directory") or ""
-            return bool(location) and os.path.normcase(os.path.normpath(location)) == target
-
-        candidates = [s for s in sessions if in_target(s)]
-        if not candidates:
-            if not self.allow_fallback:
-                raise OpenCodeError(
-                    f"no session for {self.directory}; open one there, or set opencode.session_id / allow_fallback=true"
-                )
+        if self.session_mode == "directory":
+            target = os.path.normcase(os.path.normpath(self.directory))
+            candidates = [
+                s
+                for s in sessions
+                if (s.get("location") or {}).get("directory")
+                and os.path.normcase(os.path.normpath(s["location"]["directory"])) == target
+            ]
+            if not candidates:
+                if not self.allow_fallback:
+                    raise OpenCodeError(
+                        f"no session for {self.directory}; open one there, or set opencode.session_mode=auto"
+                    )
+                candidates = sessions
+        else:
             candidates = sessions
+
         return max(candidates, key=lambda s: (s.get("time") or {}).get("updated", 0))
 
-    def send_prompt(self, text: str, session_id: str | None = None) -> dict:
+    def get_session(self, session_id: str) -> dict:
+        return self._get_session(session_id)
+
+    def send_prompt(self, text: str, session_id: str | None = None, resume: bool | None = None) -> dict:
         text = text.strip()
         if not text:
             raise OpenCodeError("empty prompt")
         session = session_id or self.resolve_session()["id"]
-        payload = self._request("POST", f"/api/session/{session}/prompt", json={"text": text})
+        body: dict = {"text": text}
+        if resume is not None:
+            body["resume"] = resume
+        payload = self._request("POST", f"/api/session/{session}/prompt", json=body)
         log.info("prompt sent to %s (%d chars)", session, len(text))
         return payload
+
+    def create_session(self, title: str, directory: str) -> dict:
+        payload = self._request(
+            "POST",
+            "/api/session",
+            json={"title": title, "location": {"directory": str(Path(directory).resolve())}},
+        )
+        return payload["data"]
+
+    def delete_session(self, session_id: str) -> None:
+        self._request("DELETE", f"/api/session/{session_id}")
+
+    def messages(self, session_id: str) -> list[dict]:
+        payload = self._request("GET", f"/api/session/{session_id}/message")
+        return payload.get("data") or []
+
+    def inbox(self, session_id: str) -> list[dict]:
+        payload = self._request("GET", f"/api/session/{session_id}/inbox")
+        return payload.get("data") or []
 
     def interrupt(self, session_id: str | None = None) -> dict:
         session = session_id or self.resolve_session()["id"]

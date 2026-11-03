@@ -35,6 +35,9 @@ uv run voice-check --record 4
 # 转写一个 wav 文件
 uv run voice-check --wav whisper.cpp\samples\jfk.wav
 
+# 端到端自检（不消耗模型额度）
+uv run python scripts\selftest_e2e.py
+
 # 前台启动守护进程（调试用，能看实时日志）
 uv run voice-daemon
 
@@ -61,13 +64,48 @@ curl.exe -X POST http://127.0.0.1:8756/submit -H "Content-Type: application/json
 | `audio.device` | 留空用系统默认；填序号或名称片段（如 `HECATE`） |
 | `commands.stop` | 说完即打断的短语（整句匹配，忽略标点） |
 | `terms` | 误识别 → 目标写法；英文规则按单词边界匹配，不会破坏 `useState` |
-| `opencode.directory` | 自动投递到该目录下最近更新的会话 |
-| `opencode.session_id` | 固定投递到某个会话（优先级更高） |
-| `opencode.allow_fallback` | 该目录无会话时是否退回全局最近会话 |
+| `opencode.session_mode` | `auto`（跟随活跃/最近会话，支持多项目）/ `directory`（限定目录）/ `pinned`（固定 `session_id`） |
+| `opencode.directory` | `directory` 模式下的目标目录 |
+| `opencode.session_id` | `pinned` 模式下的固定会话 |
 | `asr.language` | `auto` / `zh` / `en` / `ja` / `ko` / `yue` |
 
 修改配置后重启守护进程。注意鼠标侧键同时也会被浏览器/资源管理器当作“前进/后退”，
 如果觉得干扰，可以把 `hotkey.mouse` 改成 `["middle"]` 或 `[]`。
+
+## 自检与术语维护
+
+```powershell
+# 端到端自检：守护进程 / 会话创建 / 投递 / 纠错 / 停止分支（不消耗模型额度）
+uv run python scripts\selftest_e2e.py
+
+# MCP 服务器工具列表自检
+uv run python scripts\selftest_mcp.py
+
+# 扫描日志，找出还没被 [terms] 覆盖的英文词，给出待补建议
+uv run python scripts\suggest_terms.py
+```
+
+`[terms]` 的格式是「正确写法 = [可能被听成的说法]」，以 use 开头的两词名称会自动展开
+`use/us/u/you/优/优思/优斯` 与 `state/stay/stat`、`effect/affect` 等音近组合，
+所以通常只需写标准说法，例如：
+
+```toml
+[terms]
+"useState" = ["use state"]
+"OpenCode" = ["open code", "opencode"]
+"E:\\voice" = ["e 盘 voice", "e voice"]
+```
+
+## 多项目切换
+
+`opencode.session_mode = "auto"` 时的选择顺序：
+
+1. 配置了 `session_id` → 固定投递到该会话
+2. 当前有且仅有一个会话在运行 → 投递到它（语音打断/追加指令就靠这条）
+3. 否则投递到最近更新的会话（跨项目生效，跟着你正在用的会话走）
+
+如果想锁定某个项目，改成 `"directory"` 并设置 `opencode.directory`；
+想锁定某个会话，改成 `"pinned"` 并填写 `opencode.session_id`。
 
 ## MCP 注册
 

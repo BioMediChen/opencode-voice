@@ -103,6 +103,7 @@ class VoiceDaemon:
             directory=config.opencode.directory or str(root),
             session_id=config.opencode.session_id,
             allow_fallback=config.opencode.allow_fallback,
+            session_mode=config.opencode.session_mode,
         )
         self.hotkey = parse_hotkey(config.hotkey.key)
         self.mouse_buttons = parse_mouse_buttons(config.hotkey.mouse)
@@ -203,14 +204,9 @@ class VoiceDaemon:
                     print("[asr] empty result, dropped", flush=True)
                     continue
                 print(f"[asr] {elapsed:.2f}s  {text}", flush=True)
-                raw = text
-                text, fired = apply_corrections(text, self.config.terms, self._term_rules)
-                self.last_raw_text = raw
+                self.last_raw_text = text
+                text = self.fix_terms(text)
                 self.last_text = text
-                if fired:
-                    summary = ", ".join(f"{target}" for _, target in fired)
-                    print(f"[terms] {summary}: {text}", flush=True)
-                    log.info("terms fixed %s -> %s", raw, text)
                 self.handle_text(text)
             except Exception as exc:  # noqa: BLE001
                 self.last_error = str(exc)
@@ -219,12 +215,18 @@ class VoiceDaemon:
             finally:
                 self.busy = False
 
+    def fix_terms(self, text: str) -> str:
+        fixed, fired = apply_corrections(text, self.config.terms, self._term_rules)
+        if fired:
+            log.info("terms fixed %s -> %s", text, fixed)
+        return fixed
+
     @staticmethod
     def _normalize_command(text: str) -> str:
         table = str.maketrans("", "", "，。！？、；：,.!?;: \t\r\n\"'“”‘’")
         return text.translate(table).lower()
 
-    def handle_text(self, text: str) -> None:
+    def handle_text(self, text: str, resume: bool | None = None, session_id: str | None = None) -> None:
         with self._waiters_lock:
             waiters = list(self._waiters)
         if waiters:
@@ -235,7 +237,7 @@ class VoiceDaemon:
         stop_phrases = {self._normalize_command(phrase) for phrase in self.config.commands.stop}
         if self._normalize_command(text) in stop_phrases:
             try:
-                self.client.interrupt()
+                self.client.interrupt(session_id)
                 self.last_sent_at = time.time()
                 if self.config.audio.beep:
                     beep(440, 80)
@@ -247,8 +249,16 @@ class VoiceDaemon:
                 print(f"[error] {exc}", flush=True)
             return
         try:
-            payload = self.client.send_prompt(text)
+            payload = self.client.send_prompt(text, session_id=session_id, resume=resume)
             self.last_sent_at = time.time()
+            data = payload.get("data") or {}
+            used = data.get("sessionID") or data.get("sessionId")
+            if used:
+                try:
+                    with self._session_lock:
+                        self._session = self.client.get_session(used)
+                except OpenCodeError:
+                    pass
             log.debug("prompt response: %s", json.dumps(payload)[:300])
             session = self.snapshot_session()
             print(f"[sent -> {session.get('id')}] {session.get('title', '')}", flush=True)
@@ -281,6 +291,7 @@ class VoiceDaemon:
             "language": self.config.asr.language,
             "hotkey": self.config.hotkey.key,
             "mouse": list(self.config.hotkey.mouse),
+            "session_mode": self.client.session_mode,
             "triggers_down": sorted(self._triggers),
             "recording": self.recording,
             "busy": self.busy,
@@ -336,7 +347,8 @@ class VoiceDaemon:
                         self._send(400, {"ok": False, "error": "text is required"})
                         return
                     try:
-                        daemon.handle_text(text)
+                        resume = body.get("resume")
+                        daemon.handle_text(daemon.fix_terms(text), resume=resume, session_id=body.get("session_id"))
                         self._send(200, {"ok": True})
                     except OpenCodeError as exc:
                         self._send(500, {"ok": False, "error": str(exc)})

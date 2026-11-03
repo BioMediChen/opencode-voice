@@ -44,6 +44,7 @@ class CommandsConfig:
 class OpenCodeConfig:
     directory: str = ""
     session_id: str = ""
+    session_mode: str = "auto"  # auto / directory / pinned
     allow_fallback: bool = False
 
 
