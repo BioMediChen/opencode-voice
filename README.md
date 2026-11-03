@@ -29,7 +29,7 @@ scripts/            MCP/投递自检、开机自启安装脚本
 ## 快速开始（从零克隆）
 
 ```powershell
-git clone <repo-url> E:\voice
+git clone https://github.com/BioMediChen/opencode-voice.git E:\voice
 cd E:\voice
 
 # 1) Python 环境（uv 会自动装 3.12）
