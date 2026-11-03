@@ -59,12 +59,12 @@ def _ensure_daemon(wait_seconds: float = 20.0) -> None:
         return
     if os.environ.get("VOICE_NO_AUTOSTART") == "1":
         raise DaemonUnavailable(f"voice daemon not running at {BASE}")
-    log_dir = ROOT / "logs"
+    log_dir = CONFIG.root / "logs"
     log_dir.mkdir(exist_ok=True)
     log_file = (log_dir / "daemon-stdout.log").open("ab")
     subprocess.Popen(
         [sys.executable, "-m", "voice_asr.daemon"],
-        cwd=str(ROOT),
+        cwd=str(CONFIG.root),
         stdin=subprocess.DEVNULL,
         stdout=log_file,
         stderr=log_file,

@@ -1,5 +1,10 @@
 # OpenCode 语音控制（离线 ASR）
 
+[![ci](https://github.com/BioMediChen/opencode-voice/actions/workflows/ci.yml/badge.svg)](https://github.com/BioMediChen/opencode-voice/actions/workflows/ci.yml)
+![license](https://img.shields.io/badge/license-MIT-blue)
+![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
+![python](https://img.shields.io/badge/python-3.12-blue)
+
 按住 **F8** 或**鼠标侧键**说话 → 松开 → SenseVoice 本地转写 → 文本自动作为用户消息投递到当前 OpenCode 会话。
 
 - ASR：sherpa-onnx + SenseVoice-small (int8)，纯 CPU，中文/中英混说，本机实测 11s 音频转写 0.28s
@@ -49,6 +54,33 @@ uv run voice-daemon
 ```
 
 平台：Windows 10/11（音频提示音、全局热键依赖 Windows）。Linux 下需自行处理 `winsound` 和音频设备。
+
+## 实测效果
+
+```
+[recording:mouse:x2] ... release to transcribe
+[asr] 1.38s  测试us stay和优 effect.
+[terms] ... -> 测试useState和useEffect.
+[sent -> ses_e6047cd3...] opencode MCP 语音转文字接入
+```
+
+SenseVoice-small int8 在 Ryzen 7 8840U（8C/16T）上的实测：5.7 秒语音转写 0.14 秒，
+RTF ≈ 0.03（约为实时的 30 倍），全程离线、无 GPU。
+
+## 作为命令行工具安装（可选）
+
+不想克隆整个仓库时：
+
+```powershell
+uv tool install git+https://github.com/BioMediChen/opencode-voice
+
+# 配置和模型放在固定目录（模型路径相对 config.toml 所在目录解析）
+$env:VOICE_CONFIG="E:\voice\config.toml"
+voice-daemon
+```
+
+安装后可用：`voice-daemon`、`voice-mcp`、`voice-check`。
+MCP 注册时把 command 换成本机的 `voice-mcp` 可执行文件即可。
 
 ## 使用
 
@@ -160,3 +192,7 @@ MCP 服务器在需要时会自动拉起守护进程（`VOICE_NO_AUTOSTART=1` �
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1
 ```
+
+## 许可证
+
+[MIT](LICENSE)

@@ -87,6 +87,9 @@ def load_config(path: str | os.PathLike[str] | None = None) -> Config:
     config = Config()
     raw_path = Path(path or os.environ.get("VOICE_CONFIG") or DEFAULT_CONFIG)
     if raw_path.is_file():
+        # Model paths and logs are resolved relative to the config file, so a
+        # config outside the checkout (e.g. `uv tool install`) still works.
+        config.root = raw_path.resolve().parent
         with raw_path.open("rb") as fh:
             data = tomllib.load(fh)
         for section, values in data.items():
